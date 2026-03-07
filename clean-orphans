@@ -48,6 +48,16 @@ ORPHAN_PATTERNS=(
   "flutter_tester|dart.*(tooling-daemon|devtools --machine|development-service)"
   # iOS Logging
   "log stream.*Runner"
+  # Claude Code CLI 孤兒進程 (Activity Monitor 顯示為版本號如 "2.1.70")
+  # 寬泛匹配所有 claude CLI 呼叫方式（安全：腳本僅殺 PPID=1 的孤兒）
+  "(^| )claude( |$)"
+  # Claude Code 任務監視器 (shell-snapshot + tail -f task output)
+  "zsh.*shell-snapshots/snapshot-zsh.*tasks/.*\.output"
+  "tail -f.*/tmp/claude-.*/tasks/.*\.output"
+  # MCP Porter daemon 孤兒
+  "mcporter daemon"
+  # AI IDE / CLI 工具孤兒 (Kiro, Codex, Windsurf 等)
+  "kiro_cli_desktop|codex.*--dangerously|windsurf"
 )
 
 # 將陣列組合成正則表達式字串
