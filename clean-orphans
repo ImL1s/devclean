@@ -44,8 +44,8 @@ ORPHAN_PATTERNS=(
   "npm exec @playwright|npm exec @mobilenext|npm exec @upstash"
   # Frontend Dev Servers (webpack, vite, next.js, esbuild, turbopack)
   "webpack-dev-server|vite.*--host|next-server|next dev|esbuild.*--serve|turbopack"
-  # Dart & Flutter Tooling (includes fvm-managed processes)
-  "flutter_tester|dart.*(tooling-daemon|devtools --machine|development-service)|fvm (dart|flutter)"
+  # Dart & Flutter Tooling (includes all fvm-managed processes)
+  "flutter_tester|dart.*(tooling-daemon|devtools --machine|development-service)|\bfvm\b"
   # iOS Logging
   "log stream.*Runner"
   # Claude Code CLI 孤兒進程 (Activity Monitor 顯示為版本號如 "2.1.70")
@@ -173,7 +173,7 @@ if $DEEP; then
     cleanup_by_name "Kotlin LSP" "kotlinLsp"
     cleanup_by_name "Gradle Daemon" "org.gradle.launcher.daemon"
     cleanup_by_name "Flutter Daemon" "flutter_tools.snapshot daemon"
-    cleanup_by_name "FVM Dart/Flutter" "fvm (dart|flutter)"
+    cleanup_by_name "FVM Processes" "\\bfvm\\b"
     # xcodebuild 只殺孤兒 (PPID=1)，避免中斷正在進行的 build
     cleanup_orphaned_by_name "Orphaned xcodebuild" "xcodebuild"
     # Logitech 攝影機自動取景（由 logioptionsplus_agent 啟動，非 PPID=1）
