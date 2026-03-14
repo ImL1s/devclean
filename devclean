@@ -107,7 +107,7 @@ graceful_kill() {
     fi
 
     # SIGTERM 先禮貌請求退出
-    echo "$PIDS" | xargs kill 2>/dev/null
+    echo "$PIDS" | xargs kill -- 2>/dev/null
 
     # 等待最多 2 秒讓進程自行退出
     local waited=0
@@ -125,7 +125,7 @@ graceful_kill() {
     # 頑固進程用 SIGKILL 強制終結
     if [ -n "$remaining" ]; then
         echo "   ⚡ Force killing unresponsive PIDs: $remaining"
-        echo "$remaining" | xargs kill -9 2>/dev/null
+        echo "$remaining" | xargs kill -9 -- 2>/dev/null
     fi
 }
 
@@ -246,7 +246,7 @@ if $OPTIMIZE; then
                 if [ "$count" -gt 0 ]; then
                     CRASHPAD_CLEANED=$((CRASHPAD_CLEANED + count))
                     if ! $DRY_RUN; then
-                        rm -rf "$crashdir"/* 2>/dev/null
+                        find "$crashdir" -mindepth 1 -delete 2>/dev/null
                     fi
                 fi
             fi
@@ -303,6 +303,8 @@ if $DISK; then
         local label="$1"
         local target="$2"
         [ -d "$target" ] || return
+        # 防止 symlink 攻擊（TOCTOU 防護）
+        [ -L "$target" ] && return
         local size_kb
         size_kb=$(du -sk "$target" 2>/dev/null | awk '{print $1}')
         [ -z "$size_kb" ] || [ "$size_kb" -lt 1024 ] && return  # 忽略 < 1MB
@@ -396,14 +398,14 @@ if $DISK; then
     if [ -d "$HOME/Documents" ]; then
         clean_find "project build/" "$HOME/Documents" "build" \
             "pubspec.yaml" "build.gradle" "build.gradle.kts" "Makefile" "CMakeLists.txt"
-        clean_find "project .dart_tool/" "$HOME/Documents" ".dart_tool"
-        clean_find "project .gradle/" "$HOME/Documents" ".gradle"
-        clean_find "project node_modules/" "$HOME/Documents" "node_modules"
+        clean_find "project .dart_tool/" "$HOME/Documents" ".dart_tool" "pubspec.yaml"
+        clean_find "project .gradle/" "$HOME/Documents" ".gradle" "build.gradle" "build.gradle.kts" "settings.gradle"
+        clean_find "project node_modules/" "$HOME/Documents" "node_modules" "package.json"
     fi
 
     echo ""
     if [ "$DISK_TOTAL" -gt 0 ]; then
-        gb=$(awk "BEGIN {printf \"%.1f\", $DISK_TOTAL / 1024}")
+        gb=$(awk -v total="$DISK_TOTAL" 'BEGIN {printf "%.1f", total / 1024}')
         if $DRY_RUN; then
             echo "📊 Total reclaimable: ${DISK_TOTAL} MB (~${gb} GB)"
         else
