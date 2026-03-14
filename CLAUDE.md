@@ -4,15 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Bash script that safely kills orphaned development processes (PPID=1) to reclaim memory. Supports macOS and Linux. Two modes: safe mode (orphans only) and `--deep` mode (heavy daemons like Gradle, Kotlin LSP, iOS Simulators).
+A Bash script that safely cleans up development environments. Supports macOS and Linux. Four modes: safe (orphans only), `--deep` (heavy daemons), `--optimize` (IDE settings), `--disk` (caches and build artifacts).
 
 ## Development Commands
 
 ```bash
 ./devclean          # Run safe orphan cleanup
-./devclean --deep   # Aggressive cleanup (Gradle, Flutter daemon, simulators, etc.)
-./devclean --disk    # Clean development caches and build artifacts
-./install.sh             # Install to ~/.local/bin/devclean
+./devclean --deep     # Aggressive cleanup (Gradle, Flutter daemon, simulators, etc.)
+./devclean --optimize # Disable crash reporters, clean Crashpad dumps, disable background agents
+./devclean --disk     # Clean development caches and build artifacts
+./install.sh          # Install to ~/.local/bin/devclean
 bash -n devclean    # Syntax check
 shellcheck devclean # Static lint (recommended)
 ```
@@ -21,11 +22,13 @@ shellcheck devclean # Static lint (recommended)
 
 Single-file script (`devclean`) with this flow:
 
-1. **Argument parsing** — Supports `--deep`, `--dry-run`, `--help`; flags are combinable in any order
+1. **Argument parsing** — Supports `--deep`, `--optimize`, `--disk`, `--dry-run`, `--help`; flags are combinable
 2. **OS detection** — `uname -s` to distinguish Darwin/Linux
-3. **Pattern matching** — `ORPHAN_PATTERNS` array defines regex patterns for targetable processes (MCP servers, AI language servers, Node wrappers, frontend dev servers, Dart/Flutter tooling, iOS logging)
+3. **Pattern matching** — `ORPHAN_PATTERNS` array defines regex patterns for targetable processes
 4. **Safe cleanup** — Finds processes matching patterns with `PPID=1`, plus orphaned `adb logcat`; kills via `kill_and_report()`
-5. **Deep cleanup** (`--deep`) — `cleanup_by_name()` targets non-orphaned heavy daemons (Kotlin LSP, Gradle, Flutter daemon); `cleanup_orphaned_by_name()` for xcodebuild (PPID=1 only); macOS-specific `xcrun simctl shutdown all` for iOS Simulators
+5. **Deep cleanup** (`--deep`) — Kills non-orphaned heavy daemons (Kotlin LSP, Gradle, FVM, Antigravity LSP, Logi Options+, Ruby/Fastlane); iOS Simulators via `xcrun simctl shutdown all`
+6. **Optimize** (`--optimize`) — Patches VS Code fork `argv.json` to disable crash reporters; cleans Crashpad dumps; disables SMAppService agents (ChatGPTHelper, FigmaAgent)
+7. **Disk cleanup** (`--disk`) — Cleans Xcode DerivedData, iOS DeviceSupport, Gradle/CocoaPods/npm/pub caches, FVM incomplete versions, Gemini recordings, project build artifacts
 
 Key functions:
 - `report_stats(PIDS, LABEL)` — Calculates memory usage via `ps -o rss=` and prints report

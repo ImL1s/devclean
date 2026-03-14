@@ -15,8 +15,8 @@ usage() {
     echo "  --deep      Also kill heavy background daemons (Gradle, Kotlin LSP, iOS Simulators,"
     echo "              FVM, Antigravity Language Server, Logi Options+)"
     echo "              ⚠️  May interrupt active builds — use --dry-run first to preview"
-    echo "  --optimize  Disable crash reporters in VS Code / Cursor / Antigravity / Kiro,"
-    echo "              and clean up Crashpad dump files"
+    echo "  --optimize  Disable crash reporters in VS Code / Cursor / Windsurf / Antigravity / Kiro,"
+    echo "              clean Crashpad dump files, and disable background agents (ChatGPTHelper, FigmaAgent)"
     echo "  --disk      Clean development caches and build artifacts to reclaim disk space"
     echo "              (Xcode DerivedData, Gradle, FVM, node_modules, build/, etc.)"
     echo "  --dry-run   Show what would be cleaned without actually deleting anything"
@@ -189,8 +189,8 @@ if $DEEP; then
     cleanup_by_name "Antigravity Language Server" "language_server_macos_arm|language_server_linux"
     # Logitech Options+ 已知記憶體洩漏（launchd 會自動重啟）
     cleanup_by_name "Logi Options+ Agent" "logioptionsplus_agent"
-    # Ruby/Fastlane/CocoaPods（卡死的 build 或 pod install）
-    cleanup_by_name "Ruby/Fastlane" "ruby.*fastlane|pod install"
+    # Ruby/Fastlane/CocoaPods（只殺孤兒，避免中斷正在跑的 pod install）
+    cleanup_orphaned_by_name "Ruby/Fastlane" "ruby.*fastlane|pod install"
     # Logitech 攝影機自動取景（由 logioptionsplus_agent 啟動，非 PPID=1）
     cleanup_by_name "LogiRightSight" "LogiRightSight"
 
