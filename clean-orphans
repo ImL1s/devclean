@@ -176,6 +176,8 @@ if $DEEP; then
     cleanup_by_name "FVM Processes" "(^|/)fvm "
     # xcodebuild 只殺孤兒 (PPID=1)，避免中斷正在進行的 build
     cleanup_orphaned_by_name "Orphaned xcodebuild" "xcodebuild"
+    # Antigravity IDE language server（關視窗後不會自動回收，活躍視窗會自動重啟）
+    cleanup_by_name "Antigravity Language Server" "language_server_macos_arm|language_server_linux"
     # Logitech 攝影機自動取景（由 logioptionsplus_agent 啟動，非 PPID=1）
     cleanup_by_name "LogiRightSight" "LogiRightSight"
 
