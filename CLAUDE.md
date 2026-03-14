@@ -9,16 +9,16 @@ A Bash script that safely kills orphaned development processes (PPID=1) to recla
 ## Development Commands
 
 ```bash
-./clean-orphans          # Run safe orphan cleanup
-./clean-orphans --deep   # Aggressive cleanup (Gradle, Flutter daemon, simulators, etc.)
-./install.sh             # Install to ~/.local/bin/clean-orphans
-bash -n clean-orphans    # Syntax check
-shellcheck clean-orphans # Static lint (recommended)
+./devclean          # Run safe orphan cleanup
+./devclean --deep   # Aggressive cleanup (Gradle, Flutter daemon, simulators, etc.)
+./install.sh             # Install to ~/.local/bin/devclean
+bash -n devclean    # Syntax check
+shellcheck devclean # Static lint (recommended)
 ```
 
 ## Architecture
 
-Single-file script (`clean-orphans`) with this flow:
+Single-file script (`devclean`) with this flow:
 
 1. **Argument parsing** — Supports `--deep`, `--dry-run`, `--help`; flags are combinable in any order
 2. **OS detection** — `uname -s` to distinguish Darwin/Linux

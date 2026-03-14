@@ -3,24 +3,29 @@
 # 1. 參數解析
 DRY_RUN=false
 DEEP=false
+OPTIMIZE=false
 
 usage() {
-    echo "Usage: clean-orphans [OPTIONS]"
+    echo "Usage: devclean [OPTIONS]"
     echo ""
     echo "Safely kill orphaned development processes (PPID=1) to reclaim memory."
     echo ""
     echo "Options:"
-    echo "  --deep      Also kill heavy background daemons (Gradle, Kotlin LSP, iOS Simulators)"
+    echo "  --deep      Also kill heavy background daemons (Gradle, Kotlin LSP, iOS Simulators,"
+    echo "              FVM, Antigravity Language Server, Logi Options+)"
     echo "              ⚠️  May interrupt active builds — use --dry-run first to preview"
+    echo "  --optimize  Disable crash reporters in VS Code / Cursor / Antigravity / Kiro,"
+    echo "              and clean up Crashpad dump files"
     echo "  --dry-run   Show what would be killed without actually killing anything"
     echo "  -h, --help  Show this help message"
 }
 
 for arg in "$@"; do
     case "$arg" in
-        --deep)    DEEP=true ;;
-        --dry-run) DRY_RUN=true ;;
-        -h|--help) usage; exit 0 ;;
+        --deep)     DEEP=true ;;
+        --optimize) OPTIMIZE=true ;;
+        --dry-run)  DRY_RUN=true ;;
+        -h|--help)  usage; exit 0 ;;
         *) echo "Unknown option: $arg"; usage; exit 1 ;;
     esac
 done
@@ -59,7 +64,7 @@ ORPHAN_PATTERNS=(
   # AI IDE / CLI 工具孤兒 (Kiro, Codex, Windsurf 等)
   "kiro_cli_desktop|codex.*--dangerously|windsurf"
   # Third-party app orphans (helper/agent persists after main app closes)
-  "ChatGPTHelper|crashpad_handler|FirebaseCrashlytics/upload-symbols"
+  "ChatGPTHelper|FigmaAgent|crashpad_handler|FirebaseCrashlytics/upload-symbols"
 )
 
 # 將陣列組合成正則表達式字串
@@ -180,6 +185,8 @@ if $DEEP; then
     cleanup_by_name "Antigravity Language Server" "language_server_macos_arm|language_server_linux"
     # Logitech Options+ 已知記憶體洩漏（launchd 會自動重啟）
     cleanup_by_name "Logi Options+ Agent" "logioptionsplus_agent"
+    # Ruby/Fastlane/CocoaPods（卡死的 build 或 pod install）
+    cleanup_by_name "Ruby/Fastlane" "ruby.*fastlane|pod install"
     # Logitech 攝影機自動取景（由 logioptionsplus_agent 啟動，非 PPID=1）
     cleanup_by_name "LogiRightSight" "LogiRightSight"
 
@@ -196,7 +203,92 @@ if $DEEP; then
     fi
 
     echo "✅ Deep cleanup completed."
-else
+fi
+
+# 7. 優化模式
+if $OPTIMIZE; then
     echo ""
-    echo "💡 Tip: Run 'clean-orphans --deep' to also kill heavy background processes like Gradle, Kotlin LSP, and iOS Simulators."
+    echo "🔧 Optimize mode requested..."
+
+    # 7a. 停用 VS Code 系列 IDE 的 crash reporter（避免 crashpad crash loop 吃 CPU）
+    ARGV_DIRS=(
+        "$HOME/.vscode"
+        "$HOME/.cursor"
+        "$HOME/.windsurf"
+        "$HOME/.antigravity"
+        "$HOME/.kiro"
+        "$HOME/.vscode-oss"
+    )
+    for dir in "${ARGV_DIRS[@]}"; do
+        argv="$dir/argv.json"
+        if [ -f "$argv" ] && grep -q '"enable-crash-reporter": true' "$argv"; then
+            label=$(basename "$dir" | sed 's/^\.//')
+            if $DRY_RUN; then
+                echo "   → would patch $argv (disable crash reporter)"
+            else
+                sed -i.bak 's/"enable-crash-reporter": true/"enable-crash-reporter": false/' "$argv"
+                rm -f "$argv.bak"
+                echo "✅ Disabled crash reporter in $label ($argv)"
+            fi
+        fi
+    done
+
+    # 7b. 清理 Crashpad dump 檔案
+    CRASHPAD_CLEANED=0
+    if [ "$OS" == "Darwin" ]; then
+        for crashdir in "$HOME/Library/Application Support"/*/Crashpad/pending "$HOME/Library/Application Support"/*/Crashpad/completed; do
+            if [ -d "$crashdir" ]; then
+                count=$(find "$crashdir" -type f 2>/dev/null | wc -l | tr -d ' ')
+                if [ "$count" -gt 0 ]; then
+                    CRASHPAD_CLEANED=$((CRASHPAD_CLEANED + count))
+                    if ! $DRY_RUN; then
+                        rm -rf "$crashdir"/* 2>/dev/null
+                    fi
+                fi
+            fi
+        done
+        # 清理 DiagnosticReports 中的 crashpad crash reports
+        DIAG_COUNT=$(find "$HOME/Library/Logs/DiagnosticReports" -name "chrome_crashpad_handler*.ips" 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$DIAG_COUNT" -gt 0 ]; then
+            CRASHPAD_CLEANED=$((CRASHPAD_CLEANED + DIAG_COUNT))
+            if ! $DRY_RUN; then
+                rm -f "$HOME/Library/Logs/DiagnosticReports"/chrome_crashpad_handler*.ips 2>/dev/null
+            fi
+        fi
+    fi
+    if [ "$CRASHPAD_CLEANED" -gt 0 ]; then
+        if $DRY_RUN; then
+            echo "   → would delete $CRASHPAD_CLEANED Crashpad dump files"
+        else
+            echo "✅ Cleaned $CRASHPAD_CLEANED Crashpad dump files."
+        fi
+    else
+        echo "✅ No Crashpad dumps to clean."
+    fi
+
+    # 7c. 停用已知的 SMAppService 背景常駐（ChatGPTHelper, FigmaAgent）
+    SMAPP_AGENTS=(
+        "com.openai.chat-helper:ChatGPTHelper"
+        "com.figma.agent:FigmaAgent"
+    )
+    for entry in "${SMAPP_AGENTS[@]}"; do
+        label="${entry%%:*}"
+        name="${entry##*:}"
+        if launchctl print "gui/$(id -u)/$label" &>/dev/null; then
+            if $DRY_RUN; then
+                echo "   → would disable $name ($label)"
+            else
+                launchctl disable "gui/$(id -u)/$label" 2>/dev/null
+                launchctl bootout "gui/$(id -u)/$label" 2>/dev/null
+                echo "✅ Disabled $name background agent ($label)"
+            fi
+        fi
+    done
+
+    echo "✅ Optimization completed."
+fi
+
+if ! $DEEP && ! $OPTIMIZE; then
+    echo ""
+    echo "💡 Tip: Run 'devclean --deep' for heavy daemons, or 'devclean --optimize' to disable crash reporters."
 fi

@@ -1,4 +1,4 @@
-# 🧹 Clean Orphans
+# 🧹 DevClean
 
 [![macOS](https://img.shields.io/badge/os-macOS-black?logo=apple)](#) [![Linux](https://img.shields.io/badge/os-Linux-blue?logo=linux)](#) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -10,13 +10,13 @@ It identifies and kills orphaned background processes (processes where `PPID=1`)
 
 Specially optimized for **macOS** mobile developers (Flutter/iOS/Android) and developers using modern AI tools (MCP servers).
 
-![clean-orphans --deep demo](assets/demo-deep.png)
+![devclean --deep demo](assets/demo-deep.png)
 
 ## Why You Need This
 
 AI-powered coding tools and mobile development toolchains spawn background processes that **frequently fail to clean up after themselves**. These orphaned processes silently accumulate, consuming **10-20+ GB of RAM** before you even notice your machine slowing down.
 
-Instead of manually hunting them down in Activity Monitor or rebooting, `clean-orphans` safely sweeps them away in milliseconds.
+Instead of manually hunting them down in Activity Monitor or rebooting, `devclean` safely sweeps them away in milliseconds.
 
 ### Root Causes
 
@@ -101,8 +101,8 @@ CoreSimulator processes from previous Xcode sessions [linger in the background](
 ## Installation
 
 ```bash
-git clone https://github.com/ImL1s/clean-orphans.git
-cd clean-orphans
+git clone https://github.com/ImL1s/devclean.git
+cd devclean
 ./install.sh
 ```
 
@@ -119,36 +119,44 @@ cd clean-orphans
 Safe mode ONLY targets detached, orphaned tools (`PPID=1`). It is **designed to avoid active sessions** — processes attached to a living parent (your IDE, terminal, shell) are never matched.
 
 ```bash
-clean-orphans
+devclean
 ```
 
 ### Deep Clean Mode (`--deep`)
 Shuts down heavy background daemons that aren't technically orphaned but can consume GBs of RAM when idle. *(Tools like Gradle will automatically restart on your next build.)*
 
-> **Warning:** Deep mode kills non-orphaned Gradle, Kotlin LSP, Flutter daemons, FVM processes, Antigravity Language Server, and Logi Options+ agent. If a build or compilation is actively running, it may be interrupted. Use `--dry-run` first to preview what would be affected.
+> **Warning:** Deep mode kills non-orphaned Gradle, Kotlin LSP, Flutter daemons, FVM processes, Antigravity Language Server, Logi Options+ agent, and Ruby/Fastlane processes. If a build or compilation is actively running, it may be interrupted. Use `--dry-run` first to preview what would be affected.
 
 ```bash
-clean-orphans --deep
+devclean --deep
 ```
 
 ### Dry Run Mode (`--dry-run`)
 Preview what the script *would* kill without actually terminating anything. Great for auditing how much memory you could reclaim.
 
 ```bash
-clean-orphans --dry-run
-clean-orphans --deep --dry-run
+devclean --dry-run
+devclean --deep --dry-run
+```
+
+### Optimize Mode (`--optimize`)
+Applies one-time fixes to reduce resource waste: disables crash reporters in VS Code / Cursor / Antigravity / Kiro, cleans Crashpad dump files, and disables known resource-wasting background agents.
+
+```bash
+devclean --optimize
+devclean --optimize --dry-run
 ```
 
 ### Help (`-h`, `--help`)
 ```bash
-clean-orphans --help
+devclean --help
 ```
 
 ---
 
 ## Customization
 
-Add your own tools to the cleanup list by editing the `ORPHAN_PATTERNS` array in the `clean-orphans` script:
+Add your own tools to the cleanup list by editing the `ORPHAN_PATTERNS` array in the `devclean` script:
 
 ```bash
 ORPHAN_PATTERNS=(
