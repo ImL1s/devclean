@@ -45,7 +45,7 @@ ORPHAN_PATTERNS=(
   # Frontend Dev Servers (webpack, vite, next.js, esbuild, turbopack)
   "webpack-dev-server|vite.*--host|next-server|next dev|esbuild.*--serve|turbopack"
   # Dart & Flutter Tooling (includes all fvm-managed processes)
-  "flutter_tester|dart.*(tooling-daemon|devtools --machine|development-service)|(^|/)fvm "
+  "flutter_tester|dart.*(tooling-daemon|devtools|development-service)|(^|/)fvm "
   # iOS Logging
   "log stream.*Runner"
   # Claude Code CLI 孤兒進程 (Activity Monitor 顯示為版本號如 "2.1.70")
