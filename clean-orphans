@@ -178,6 +178,8 @@ if $DEEP; then
     cleanup_orphaned_by_name "Orphaned xcodebuild" "xcodebuild"
     # Antigravity IDE language server（關視窗後不會自動回收，活躍視窗會自動重啟）
     cleanup_by_name "Antigravity Language Server" "language_server_macos_arm|language_server_linux"
+    # Logitech Options+ 已知記憶體洩漏（launchd 會自動重啟）
+    cleanup_by_name "Logi Options+ Agent" "logioptionsplus_agent"
     # Logitech 攝影機自動取景（由 logioptionsplus_agent 啟動，非 PPID=1）
     cleanup_by_name "LogiRightSight" "LogiRightSight"
 
