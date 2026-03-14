@@ -11,6 +11,7 @@ A Bash script that safely kills orphaned development processes (PPID=1) to recla
 ```bash
 ./devclean          # Run safe orphan cleanup
 ./devclean --deep   # Aggressive cleanup (Gradle, Flutter daemon, simulators, etc.)
+./devclean --disk    # Clean development caches and build artifacts
 ./install.sh             # Install to ~/.local/bin/devclean
 bash -n devclean    # Syntax check
 shellcheck devclean # Static lint (recommended)

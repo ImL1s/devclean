@@ -147,6 +147,16 @@ devclean --optimize
 devclean --optimize --dry-run
 ```
 
+### 磁碟清理模式（`--disk`）
+清理開發快取和建置產物以回收磁碟空間。所有清理的項目都可以重新建置 — 下次 build 會自動重新下載。
+
+清理目標：Xcode DerivedData、iOS DeviceSupport、Gradle 快取、CocoaPods、Flutter pub cache、npm cache、FVM 不完整版本、Gemini 瀏覽器錄影、專案 `build/`、`.dart_tool/`、`.gradle/`、`node_modules/` 目錄。
+
+```bash
+devclean --disk
+devclean --disk --dry-run
+```
+
 ### 說明（`-h`、`--help`）
 ```bash
 devclean --help

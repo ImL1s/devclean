@@ -4,6 +4,7 @@
 DRY_RUN=false
 DEEP=false
 OPTIMIZE=false
+DISK=false
 
 usage() {
     echo "Usage: devclean [OPTIONS]"
@@ -16,7 +17,9 @@ usage() {
     echo "              ⚠️  May interrupt active builds — use --dry-run first to preview"
     echo "  --optimize  Disable crash reporters in VS Code / Cursor / Antigravity / Kiro,"
     echo "              and clean up Crashpad dump files"
-    echo "  --dry-run   Show what would be killed without actually killing anything"
+    echo "  --disk      Clean development caches and build artifacts to reclaim disk space"
+    echo "              (Xcode DerivedData, Gradle, FVM, node_modules, build/, etc.)"
+    echo "  --dry-run   Show what would be cleaned without actually deleting anything"
     echo "  -h, --help  Show this help message"
 }
 
@@ -24,6 +27,7 @@ for arg in "$@"; do
     case "$arg" in
         --deep)     DEEP=true ;;
         --optimize) OPTIMIZE=true ;;
+        --disk)     DISK=true ;;
         --dry-run)  DRY_RUN=true ;;
         -h|--help)  usage; exit 0 ;;
         *) echo "Unknown option: $arg"; usage; exit 1 ;;
@@ -288,7 +292,130 @@ if $OPTIMIZE; then
     echo "✅ Optimization completed."
 fi
 
-if ! $DEEP && ! $OPTIMIZE; then
+# 8. 磁碟清理模式
+if $DISK; then
     echo ""
-    echo "💡 Tip: Run 'devclean --deep' for heavy daemons, or 'devclean --optimize' to disable crash reporters."
+    echo "💾 Disk cleanup requested..."
+    DISK_TOTAL=0
+
+    # 清理單一目錄的 helper
+    clean_dir() {
+        local label="$1"
+        local target="$2"
+        [ -d "$target" ] || return
+        local size_kb
+        size_kb=$(du -sk "$target" 2>/dev/null | awk '{print $1}')
+        [ -z "$size_kb" ] || [ "$size_kb" -lt 1024 ] && return  # 忽略 < 1MB
+        local size_mb=$((size_kb / 1024))
+        DISK_TOTAL=$((DISK_TOTAL + size_mb))
+        if $DRY_RUN; then
+            echo "   → would clean $label (${size_mb} MB)"
+        else
+            rm -rf "$target"
+            echo "🗑️  Cleaned $label (${size_mb} MB)"
+        fi
+    }
+
+    # 清理 find 搜尋結果的 helper（帶 parent 檔案驗證）
+    clean_find() {
+        local label="$1"
+        local scan_dir="$2"
+        local dir_name="$3"
+        shift 3
+        local parent_files=("$@")
+        local found_size=0
+        local found_count=0
+
+        while IFS= read -r d; do
+            [ -z "$d" ] && continue
+            local parent_dir
+            parent_dir="$(dirname "$d")"
+            local valid=false
+            if [ ${#parent_files[@]} -eq 0 ]; then
+                valid=true
+            else
+                for pf in "${parent_files[@]}"; do
+                    [ -f "$parent_dir/$pf" ] && valid=true && break
+                done
+            fi
+            if $valid; then
+                local kb
+                kb=$(du -sk "$d" 2>/dev/null | awk '{print $1}')
+                [ -z "$kb" ] && continue
+                found_size=$((found_size + kb))
+                found_count=$((found_count + 1))
+                $DRY_RUN || rm -rf "$d"
+            fi
+        done < <(find "$scan_dir" -maxdepth 6 -type d -name "$dir_name" 2>/dev/null)
+
+        if [ "$found_count" -gt 0 ]; then
+            local mb=$((found_size / 1024))
+            DISK_TOTAL=$((DISK_TOTAL + mb))
+            if $DRY_RUN; then
+                echo "   → would clean $found_count $label dirs (${mb} MB)"
+            else
+                echo "🗑️  Cleaned $found_count $label dirs (${mb} MB)"
+            fi
+        fi
+    }
+
+    # === macOS 開發工具快取 ===
+    if [ "$OS" == "Darwin" ]; then
+        clean_dir "Xcode DerivedData" "$HOME/Library/Developer/Xcode/DerivedData"
+        clean_dir "iOS DeviceSupport" "$HOME/Library/Developer/Xcode/iOS DeviceSupport"
+        clean_dir "XCTestDevices" "$HOME/Library/Developer/XCTestDevices"
+        clean_dir "CocoaPods cache" "$HOME/Library/Caches/CocoaPods"
+        clean_dir "Playwright cache" "$HOME/Library/Caches/ms-playwright"
+    fi
+
+    # === 跨平台開發工具快取 ===
+    clean_dir "Gradle caches" "$HOME/.gradle/caches"
+    clean_dir "Gradle wrapper" "$HOME/.gradle/wrapper"
+    clean_dir "CocoaPods repos" "$HOME/.cocoapods/repos"
+    clean_dir "Pub cache" "$HOME/.pub-cache"
+    clean_dir "npm cache" "$HOME/.npm"
+
+    # === AI 工具 / IDE 快取 ===
+    clean_dir "Gemini browser recordings" "$HOME/.gemini/antigravity/browser_recordings"
+    clean_dir "Codex sessions" "$HOME/.codex/sessions"
+    clean_dir "Codex logs" "$HOME/.codex/log"
+
+    # === FVM 不完整版本（"Need setup" 狀態）===
+    if command -v fvm &>/dev/null; then
+        for ver_dir in "$HOME"/fvm/versions/*/; do
+            [ -d "$ver_dir" ] || continue
+            # 沒有 bin/flutter 表示下載不完整
+            if [ ! -f "$ver_dir/bin/flutter" ]; then
+                ver_name=$(basename "$ver_dir")
+                clean_dir "FVM incomplete ($ver_name)" "$ver_dir"
+            fi
+        done
+    fi
+
+    # === 專案 build artifacts（~/Documents 下）===
+    if [ -d "$HOME/Documents" ]; then
+        clean_find "project build/" "$HOME/Documents" "build" \
+            "pubspec.yaml" "build.gradle" "build.gradle.kts" "Makefile" "CMakeLists.txt"
+        clean_find "project .dart_tool/" "$HOME/Documents" ".dart_tool"
+        clean_find "project .gradle/" "$HOME/Documents" ".gradle"
+        clean_find "project node_modules/" "$HOME/Documents" "node_modules"
+    fi
+
+    echo ""
+    if [ "$DISK_TOTAL" -gt 0 ]; then
+        gb=$(awk "BEGIN {printf \"%.1f\", $DISK_TOTAL / 1024}")
+        if $DRY_RUN; then
+            echo "📊 Total reclaimable: ${DISK_TOTAL} MB (~${gb} GB)"
+        else
+            echo "📊 Total reclaimed: ${DISK_TOTAL} MB (~${gb} GB)"
+        fi
+    else
+        echo "✅ No significant disk caches to clean."
+    fi
+    echo "✅ Disk cleanup completed."
+fi
+
+if ! $DEEP && ! $OPTIMIZE && ! $DISK; then
+    echo ""
+    echo "💡 Tip: Run 'devclean --deep' for heavy daemons, 'devclean --optimize' for IDE settings, or 'devclean --disk' for disk space."
 fi

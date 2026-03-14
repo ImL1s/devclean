@@ -147,6 +147,16 @@ devclean --optimize
 devclean --optimize --dry-run
 ```
 
+### Disk Cleanup Mode (`--disk`)
+Reclaims disk space by cleaning development caches and build artifacts. All cleaned items are rebuildable — your next build will re-download what it needs.
+
+Targets: Xcode DerivedData, iOS DeviceSupport, Gradle caches, CocoaPods, Flutter pub cache, npm cache, FVM incomplete versions, Gemini browser recordings, project `build/`, `.dart_tool/`, `.gradle/`, `node_modules/` directories.
+
+```bash
+devclean --disk
+devclean --disk --dry-run
+```
+
 ### Help (`-h`, `--help`)
 ```bash
 devclean --help
