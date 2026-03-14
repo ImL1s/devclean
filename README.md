@@ -41,6 +41,7 @@ Tools like Claude Code, Cursor, OpenCode, and Antigravity spawn [MCP (Model Cont
 | Cursor | [MCP processes accumulate over time](https://forum.cursor.com/t/mcp-server-processes-are-not-terminated-and-accumulate-over-time-causing-memory-leaks/143181) | Dozens of orphaned `node`/`npm` processes |
 | OpenCode | [MCP processes not terminated on session end](https://github.com/anomalyco/opencode/issues/6633) | [Zombie process accumulation](https://github.com/anomalyco/opencode/issues/11225) |
 | Antigravity | [Language server high memory consumption](https://discuss.ai.google.dev/t/solved-antigravity-hangs-due-to-language-server-windows-x64-high-memory-consumption/116025) | [Zombie processes after quit](https://antigravity.codes/blog/antigravity-server-crashed-fix); backend ports don't clear |
+| Antigravity | [MCP servers spawn per-workspace, never cleaned up](https://discuss.ai.google.dev/t/bug-mcp-servers-spawn-per-workspace-causes-process-explosion-and-10-gb-idle-ram/129054) | Process explosion; ~10 GB idle RAM |
 
 #### 2. Frontend Dev Servers: Ctrl+C Doesn't Always Work
 
@@ -62,6 +63,7 @@ The Flutter daemon also [spawns sub-processes like `xcdevice observe`](https://g
 |------|-------|--------|
 | Flutter / Dart | [Daemon orphaned when IDE closes](https://github.com/Dart-Code/Dart-Code/issues/5216) | SIGTERM [doesn't propagate](https://github.com/Dart-Code/Dart-Code/issues/5155) through shell wrapper |
 | Flutter | [`xcdevice observe` leaked by daemon](https://github.com/flutter/flutter/issues/73859) | Orphaned sub-processes pile up |
+| FVM | FVM-managed `dart`/`flutter` processes can get stuck (e.g. `fvm use` waiting for interactive input) | Stuck processes accumulate at 100% CPU each |
 
 #### 4. Gradle: Daemon Multiplication
 
@@ -76,6 +78,10 @@ Gradle daemons are designed to stay alive for performance. But a [new daemon is 
 
 CoreSimulator processes from previous Xcode sessions [linger in the background](https://www.repeato.app/managing-xcodes-coresimulator-devices-folder-a-practical-guide/) because Xcode [has no idea what you still need](https://developer.apple.com/forums/thread/758703) and won't clean them up for you. They collectively consume **10-20+ GB**.
 
+#### 6. Logi Options+: Known Memory Leak
+
+`logioptionsplus_agent` has a [well-documented memory leak](https://logitech.uservoice.com/forums/925117-logi-options/suggestions/45330115-memory-leak-with-the-latest-logi-options) that has been reported for 3+ years. The agent starts at ~100 MB but [grows to multi-GB over time](https://canartuc.medium.com/if-you-are-short-on-ram-nowadays-check-logi-options-2bfcf1187500) — in extreme cases up to 36 GB. Since `launchd` auto-restarts it, the only practical solution is to periodically kill the process and let it restart fresh. Logitech has not fully fixed this issue.
+
 ---
 
 ### How We Solve It
@@ -87,7 +93,7 @@ CoreSimulator processes from previous Xcode sessions [linger in the background](
 | **`pgrep` over `ps\|grep`** | Uses `pgrep -f` to avoid self-matching and reduce false positives | Yes |
 | **Frontend dev servers** | Catches orphaned webpack-dev-server, vite, next.js, esbuild, turbopack processes | Yes — only PPID=1 orphans |
 | **Graceful termination** | SIGTERM → 2s wait → SIGKILL only for unresponsive processes | Yes — gives processes time to save state |
-| **Deep mode separation** | Heavy daemons (Gradle, Kotlin LSP) require explicit `--deep` flag; `xcodebuild` further restricted to orphans only | Yes — opt-in, never surprises |
+| **Deep mode separation** | Heavy daemons (Gradle, Kotlin LSP, FVM, Antigravity Language Server, Logi Options+) require explicit `--deep` flag; `xcodebuild` further restricted to orphans only | Yes — opt-in, never surprises |
 | **Dry-run** | `--dry-run` previews everything without killing | N/A — read-only |
 
 ---
@@ -119,7 +125,7 @@ clean-orphans
 ### Deep Clean Mode (`--deep`)
 Shuts down heavy background daemons that aren't technically orphaned but can consume GBs of RAM when idle. *(Tools like Gradle will automatically restart on your next build.)*
 
-> **Warning:** Deep mode kills non-orphaned Gradle, Kotlin LSP, and Flutter daemons. If a build or compilation is actively running, it may be interrupted. Use `--dry-run` first to preview what would be affected.
+> **Warning:** Deep mode kills non-orphaned Gradle, Kotlin LSP, Flutter daemons, FVM processes, Antigravity Language Server, and Logi Options+ agent. If a build or compilation is actively running, it may be interrupted. Use `--dry-run` first to preview what would be affected.
 
 ```bash
 clean-orphans --deep
